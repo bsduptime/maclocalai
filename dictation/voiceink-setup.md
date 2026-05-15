@@ -43,15 +43,31 @@ If Parakeet isn't listed in your VoiceInk version, fall back to **whisper-large-
 
 ## 4. Wire AI cleanup to Ollama
 
-VoiceInk → Settings → **AI Enhancement** (or "Post-processing" / "AI cleanup")
+VoiceInk → Settings → **Enhancement**
+
+### 4a. Provider + model
 
 - Provider: **Ollama** (or "Custom OpenAI-compatible endpoint")
 - Endpoint: `http://localhost:11434`
 - Model: `qwen3:8b`
-- System prompt: paste the contents of [`prompts/cleanup.md`](prompts/cleanup.md)
-- Enable: ✅
 
-Test: dictate "um so like I was thinking maybe we could uh push this to next week" — you should get back something like *"I was thinking we could push this to next week."*
+### 4b. Create a custom enhancement preset
+
+⚠️ **The built-in `Default` and `Assistant` presets are read-only — double-clicking them only lets you edit trigger words, not the prompt.** You must create your own preset.
+
+In the Enhancement panel:
+
+1. Click the **+** (or "New Prompt" / "Add Custom Prompt") button
+2. Name it something like `Cleanup (multilingual)`
+3. Paste the contents of [`prompts/cleanup.md`](prompts/cleanup.md) into the prompt body
+4. Save
+5. **Set the new preset as active** (radio button / selector)
+
+### 4c. Test
+
+Dictate *"um so like I was thinking maybe we could uh push this to next week"* — you should get back something like *"I was thinking we could push this to next week."*
+
+For multilingual users, also test in your second language to confirm the model preserves it (didn't translate).
 
 ## 5. (Optional) Add a "polished rewrite" preset
 
