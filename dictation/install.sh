@@ -62,26 +62,19 @@ if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
   exit 1
 fi
 
-# ---------- Models ----------
-say "Pulling Qwen 3 8B (~5 GB) — fast hot-path cleanup model."
-if ollama list | awk '{print $1}' | grep -qx "qwen3:8b"; then
+# ---------- Cleanup model (optional) ----------
+say "Optional: pull Qwen 3 8B (~5 GB) — powers VoiceInk's AI cleanup."
+echo "    Skip if you only want raw Parakeet transcription. The cleanup"
+echo "    model adds punctuation to long-form speech and removes fillers,"
+echo "    but for short utterances (chat, terminal) raw Parakeet is enough."
+
+if ollama list 2>/dev/null | awk '{print $1}' | grep -qx "qwen3:8b"; then
   echo "qwen3:8b already pulled — skipping."
 else
   if confirm "Pull qwen3:8b now? (~5 GB download)"; then
     ollama pull qwen3:8b
   else
     echo "Skipped. Pull later with: ollama pull qwen3:8b"
-  fi
-fi
-
-say "Pulling Qwen 3 14B (~9 GB) — higher-quality rewrite model. Optional."
-if ollama list | awk '{print $1}' | grep -qx "qwen3:14b"; then
-  echo "qwen3:14b already pulled — skipping."
-else
-  if confirm "Pull qwen3:14b now? (~9 GB download, optional but recommended)"; then
-    ollama pull qwen3:14b
-  else
-    echo "Skipped. Pull later with: ollama pull qwen3:14b"
   fi
 fi
 
@@ -97,9 +90,9 @@ Next steps (manual GUI config — takes ~2 minutes):
 
 That guide walks you through:
   - Setting Fn as the push-to-talk hotkey
-  - Downloading the Parakeet ASR model from VoiceInk's Models tab
-  - Pointing AI cleanup at Ollama (http://localhost:11434, qwen3:8b)
-  - Pasting the cleanup prompt from prompts/cleanup.md
+  - Downloading Parakeet TDT 0.6B v3 from VoiceInk's Models tab
+  - (Optional) Wiring Ollama qwen3:8b to VoiceInk's built-in Default
+    enhancement preset for punctuation in long-form speech
 
 Test it: hold Fn anywhere with a text field, speak a sentence, release.
 

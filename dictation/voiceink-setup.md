@@ -41,43 +41,30 @@ Why Parakeet over Whisper for dictation:
 
 If Parakeet isn't listed in your VoiceInk version, fall back to **whisper-large-v3-turbo** (still excellent — what most local setups used through 2025).
 
-## 4. Wire AI cleanup to Ollama
+## 4. (Optional) Wire AI cleanup to Ollama
+
+Skip this if you're happy with raw Parakeet output. The cleanup step's main practical benefit is **inserting punctuation in long-form speech** — Parakeet adds basic periods but won't structure a 5-minute brainstorm into proper sentences. For short utterances (terminal commands, chat messages) it's usually overkill.
 
 VoiceInk → Settings → **Enhancement**
-
-### 4a. Provider + model
 
 - Provider: **Ollama** (or "Custom OpenAI-compatible endpoint")
 - Endpoint: `http://localhost:11434`
 - Model: `qwen3:8b`
+- Active preset: **Default** (built-in — handles filler removal + punctuation correctly without a custom prompt)
 
-### 4b. Create a custom enhancement preset
+Test: dictate *"um so like I was thinking maybe we could uh push this to next week"* → should come back as something like *"I was thinking we could push this to next week."*
 
-⚠️ **The built-in `Default` and `Assistant` presets are read-only — double-clicking them only lets you edit trigger words, not the prompt.** You must create your own preset.
+### About the other built-in preset
 
-In the Enhancement panel:
+**Assistant** is a different feature entirely — triggered by saying "Hey!" at the start of recording, it treats your speech as a question and returns the LLM's *answer* instead of a cleaned transcript (like a voice ChatGPT). For people who already have Claude or another frontier model open, it's redundant. Leave Default selected.
 
-1. Click the **+** (or "New Prompt" / "Add Custom Prompt") button
-2. Name it something like `Cleanup (multilingual)`
-3. Paste the contents of [`prompts/cleanup.md`](prompts/cleanup.md) into the prompt body
-4. Save
-5. **Set the new preset as active** (radio button / selector)
+### Hotkey to switch presets mid-recording
 
-### 4c. Test
+`Cmd+1`, `Cmd+2`, etc. (or `Opt+number`) cycles between presets while you're recording. Useful if you want to flip between cleanup and Assistant on the fly.
 
-Dictate *"um so like I was thinking maybe we could uh push this to next week"* — you should get back something like *"I was thinking we could push this to next week."*
+### Multilingual note
 
-For multilingual users, also test in your second language to confirm the model preserves it (didn't translate).
-
-## 5. (Optional) Add a "polished rewrite" preset
-
-If VoiceInk supports multiple AI presets / hotkey-bound modes, add a second one:
-
-- Model: `qwen3:14b`
-- Prompt: see [`prompts/rewrite.md`](prompts/rewrite.md)
-- Bind to a different hotkey (e.g. Fn+Shift)
-
-Use `qwen3:8b` for normal dictation (fast). Use `qwen3:14b` when you want it to actually restructure rambling thoughts into a polished message.
+Default cleanup with `qwen3:8b` works correctly when each utterance is single-language. The only failure mode is mid-sentence English↔German switching (the model may settle on one language for the whole output). In normal speech, you don't usually code-switch mid-sentence, so this rarely bites.
 
 ## Troubleshooting
 
@@ -85,6 +72,6 @@ Use `qwen3:8b` for normal dictation (fast). Use `qwen3:14b` when you want it to 
 
 **"Connection refused" to Ollama.** Check it's running: `brew services list | grep ollama`. Restart with `brew services restart ollama`.
 
-**Cleanup is slow.** Switch to `qwen3:8b` (faster than `qwen3:14b`), or disable AI cleanup entirely for ASR-only mode.
+**Cleanup is slow or you want pure ASR.** Disable AI Enhancement — Parakeet alone is fast and accurate; cleanup is purely a formatting layer.
 
-**Cleanup over-edits / changes meaning.** Tighten the system prompt — see notes in [`prompts/cleanup.md`](prompts/cleanup.md).
+**Cleanup translates between languages.** The Default preset only does this on mid-sentence code-switching. If you hit it often, disable enhancement for short utterances and re-enable only for long-form work.

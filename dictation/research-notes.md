@@ -4,7 +4,7 @@ Snapshot of the reasoning behind the dictation stack choices. The landscape chan
 
 ## ASR: Parakeet over Whisper
 
-In 2024–2025, `whisper-large-v3-turbo` was the default local-ASR choice. By early 2026 NVIDIA's **Parakeet TDT 0.6B** displaced it for English-only dictation:
+In 2024–2025, `whisper-large-v3-turbo` was the default local-ASR choice. By early 2026 NVIDIA's **Parakeet TDT 0.6B** displaced it for live dictation. The v3 variant adds multilingual support (English + German + 23 other European languages) at a tiny English-accuracy cost (6.32% vs 6.05% WER) over the v2 English-only variant:
 
 - ~10× faster than whisper-large-v3-turbo (Whisper Notes benchmark)
 - FluidAudio's CoreML build runs on the Apple Neural Engine — ~193 ms average latency on M3+, faster than any MLX-based Whisper
@@ -24,19 +24,18 @@ Picked VoiceInk because:
 - Supports Parakeet via the CoreML/ANE path
 - Maintained (Beingpax/VoiceInk on GitHub)
 
-## LLM: Qwen 3 over Llama / Mistral / Gemma
+## LLM cleanup model: Qwen 3 8B
 
 Verified May 2026 against ollama.com/library:
 
 | Model | Tag | Notes |
 |---|---|---|
-| Qwen 3 8B | `qwen3:8b` | Best instruction-following + reasoning under 8B; HumanEval 76.0 leads class |
-| Qwen 3 14B | `qwen3:14b` | Same family, more capacity for structural rewrites; ~9 GB at Q4, fits 16 GB Macs |
+| Qwen 3 8B | `qwen3:8b` | Best instruction-following + reasoning under 8B; HumanEval 76.0 leads class. ~5 GB at Q4. |
 | Llama 3.3 8B | not on Ollama at time of writing (only `llama3.3:70b`) | Skip |
 | Mistral Small 3.2 | `mistral-small3.2:24b` | 24B is too large for 18 GB Macs at decent quant |
 | Gemma 3 12B | not verified on Ollama at writing | Reasonable alternative if you prefer Google models |
 
-For our two use cases — fast hot-path cleanup and on-demand polished rewrites — Qwen 3 8B and 14B cover the spectrum cleanly without leaving the same model family (consistent prompt behavior).
+We deliberately did **not** wire a heavier "rewrite" model into VoiceInk. For occasional polished rewrites, paste into Claude or another frontier model — that's more flexible than burning a local LLM round-trip on every utterance, and frontier models do that job materially better than anything local in the 14B–24B class.
 
 ## Hardware sanity check
 
@@ -44,9 +43,8 @@ Stack memory footprint at Q4:
 
 - Parakeet 0.6B: ~600 MB
 - qwen3:8b: ~5 GB
-- qwen3:14b: ~9 GB
 
-You won't run all three at peak simultaneously — Parakeet runs during recording, then unloads; one LLM runs after release. ~9 GB resident peak is a comfortable fit on 16 GB and trivial on 18 GB+.
+Parakeet runs during recording then unloads; qwen3:8b runs after release. Total resident peak well under 6 GB, trivial on 16 GB+.
 
 ## Sources
 
