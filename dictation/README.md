@@ -4,14 +4,16 @@ Push-to-talk system-wide voice input on Mac. Hold **Fn**, speak, release — you
 
 ## Stack
 
-| Layer | Tool | Why |
-|---|---|---|
-| Dictation app | [VoiceInk](https://github.com/Beingpax/VoiceInk) | Open source, Wispr-Flow-style hold-to-talk, works in every Mac app, supports both Whisper and Parakeet |
-| ASR (speech → text) | NVIDIA **Parakeet TDT 0.6B** (downloaded inside VoiceInk) | ~10× faster than Whisper-large-v3-turbo on Apple Silicon, English-only, doesn't hallucinate during silence. ~200ms latency on M3+ via CoreML / Neural Engine. |
-| LLM cleanup (hot path) | **Qwen 3 8B** via [Ollama](https://ollama.com) | Filler removal, light formatting, punctuation. ~5 GB at Q4. Best instruction-following under 8B as of 2026. |
-| LLM cleanup (heavy rewrite) | **Qwen 3 14B** via Ollama | "Rewrite this as a polished email" / structural rewrites. ~9 GB at Q4. Optional. |
+| Layer | Tool | Why | Required? |
+|---|---|---|---|
+| Dictation app | [VoiceInk](https://github.com/Beingpax/VoiceInk) | Open source, Wispr-Flow-style hold-to-talk, works in every Mac app, supports both Whisper and Parakeet | yes |
+| ASR (speech → text) | NVIDIA **Parakeet TDT 0.6B v3** (downloaded inside VoiceInk) | Multilingual (English + German + 23 EU langs), ~10× faster than Whisper-large-v3-turbo on Apple Silicon, doesn't hallucinate during silence. ~200ms latency on M3+ via CoreML / Neural Engine. | yes |
+| LLM cleanup (hot path) | **Qwen 3 8B** via [Ollama](https://ollama.com) | Filler removal, light formatting, punctuation. ~5 GB at Q4. | **optional** |
+| LLM cleanup (heavy rewrite) | **Qwen 3 14B** via Ollama | "Rewrite this as a polished email" / structural rewrites. ~9 GB at Q4. | **optional** |
 
-Total disk: ~15 GB for both LLMs + ~600 MB for Parakeet.
+Total disk: ~600 MB for Parakeet alone, +~15 GB if you also pull both LLMs.
+
+> **Heads up on AI cleanup**: Parakeet's raw output is already excellent. Many users (including the author) prefer to skip the LLM cleanup step entirely — it can introduce subtle issues like translating between languages in mixed-language workflows, or over-editing speech that didn't need it. Try Parakeet alone first; only add LLM cleanup if raw output isn't clean enough for your use case.
 
 ## Why these picks
 
