@@ -1,48 +1,81 @@
-# voice-replies (planned, not yet built)
+# voice-replies
 
-Closes the voice loop with [`dictation/`](../dictation/): Claude speaks responses back through your speakers / AirPods after each turn. Combined with dictation, the whole interaction becomes voice.
+Closes the voice loop with [`dictation/`](../dictation/): Claude speaks responses back through your default audio output after each turn. Combined with dictation, the whole interaction becomes voice.
 
-## Architecture
+## Tiers (deliberate two-step design)
+
+| Tier | Status | Backend | Setup | Quality | Latency |
+|---|---|---|---|---|---|
+| 1 — MVP | **shipped** | **macOS `say`** | zero (built into macOS) | mediocre (decent with Siri voices) | instant |
+| 2 — Premium | planned | **Chatterbox on Jetson (CUDA), Tailscale to Mac** | see [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) | best — beats ElevenLabs in blind tests (63.75%) | sub-200ms first sound |
+
+**No middle tier (Kokoro)** by design. Two clear choices keep the mental model simple.
+
+## Tier 1: install (shipped)
+
+```bash
+bash install.sh
+```
+
+The installer:
+
+1. Copies `voice-reply.py` to `~/.claude/hooks/`
+2. Lets you pick a voice (and falls back to Samantha if the chosen voice isn't installed)
+3. Tests the voice ("Hello from voice replies.")
+4. Registers a Stop hook in `~/.claude/settings.json` (backs up the existing file first)
+
+**Take-effect:** start a new Claude Code session. Existing sessions don't pick up newly-registered hooks.
+
+## How Tier 1 works
 
 ```
 Claude finishes a turn
-   ↓ Claude Code Stop hook fires
-[script]
-   1. Read the last assistant message from the session transcript
-   2. Strip markdown (#, **, code blocks, links, etc. — TTS reads them literally)
-   3. POST text to a TTS backend
-[TTS backend]
-   ↓ audio
-[speakers / AirPods]
+    │ Stop hook fires
+    ▼
+voice-reply.py:
+  1. Reads the Stop event JSON from stdin
+  2. Opens the session transcript (JSONL)
+  3. Finds the most recent assistant message
+  4. Strips markdown (headers, bold, links, code blocks, tables, emoji)
+  5. Drops the trailing "Sources:" section
+  6. Caps at 2000 characters
+  7. Backgrounds `say -v <voice>` so it doesn't block the next turn
+    │
+    ▼
+audio out (speakers / AirPods)
 ```
 
-## Two backends (deliberate two-tier design)
+If a new Claude turn starts before previous speech finishes, the script kills the in-flight `say` and starts the new one — no overlapping voices.
 
-| Tier | Backend | When | Setup | Quality | Latency |
-|---|---|---|---|---|---|
-| 1 — MVP | **macOS `say`** | proof-of-concept; throwaway sessions | zero (built into macOS) | mediocre (Sequoia+ Siri voices are decent) | instant |
-| 2 — Premium | **Chatterbox on Jetson (CUDA), Tailscale to Mac** | daily-driver | see [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai) | best — natural, expressive, beats ElevenLabs in blind tests (63.75%) | sub-200ms first sound |
+## Changing voice later
 
-**No middle tier (Kokoro)** by design. Two clear choices — instant-but-meh and premium-but-routed-via-Jetson — keeps the mental model simple.
+Re-run `install.sh`, or edit `~/.claude/settings.json` and update the `VOICE_REPLY_VOICE` value in the Stop hook command.
 
-## Why Chatterbox on Jetson, not on Mac?
+List installed voices:
 
-Chatterbox's MPS (Apple GPU) support is currently broken — it falls back to CPU on Mac, giving 1-2s per utterance. The Jetson's CUDA path gets sub-200ms first sound. With Tailscale already in place, the Mac POSTs text to the Jetson TTS server and gets audio back — net latency is comparable to running TTS locally on the Mac, with much better quality.
+```bash
+say -v ?
+```
 
-## Voice profile choice
+For **Siri-quality** voices (much better than the classic Samantha/Daniel/etc.):
 
-When configuring Chatterbox, pick a **non-you** voice reference for Claude. Most people find AI-as-themselves uncanny long-term. The existing `founder.m4a` clone in the content pipeline stays for narration use (where it should sound like David); Claude gets a different reference.
+System Settings → Accessibility → Spoken Content → System Voice → click a voice (Ava, Allison, Tom, Joelle, etc.) → Download. Then re-run `install.sh` and type the voice name at the prompt.
 
-## Status
+## Uninstall
 
-Not built. Next steps when picking this up:
+Edit `~/.claude/settings.json` and remove the Stop hook entry that references `voice-reply.py`.
 
-1. Build the Tier 1 path (`say` + Stop hook + markdown stripper) — fastest validation that the loop is worth it at all.
-2. Pick a Chatterbox voice reference for Claude.
-3. Stand up `chatterbox-tts-server` on the Jetson (sibling stack in `jetsonlocalai`).
-4. Swap the Mac client to point at the Jetson server.
+## Tier 2 (planned)
+
+When you graduate from `say` to wanting better voice quality:
+
+1. Stand up [`chatterbox-tts-server`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) on the Jetson.
+2. Replace the `say` call in `voice-reply.py` with an HTTP POST to the Jetson server.
+3. Pick a non-you Chatterbox voice reference for Claude (most people find AI-in-their-own-voice uncanny long-term).
+
+This stack will ship a Tier 2 variant once that server exists.
 
 ## See also
 
 - [`dictation/`](../dictation/) — voice input (the other half of the loop)
-- [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai) — the CUDA-side server this stack will talk to
+- [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) — the future CUDA-side server this stack will talk to in Tier 2

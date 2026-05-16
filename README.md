@@ -8,9 +8,10 @@ Each subfolder is a self-contained stack with its own `install.sh` and notes.
 
 | Stack | What you get |
 |---|---|
-| [`dictation/`](dictation/) | Push-to-talk system-wide voice input (hold Fn → speak → release → text appears). Wispr-Flow-style UX, fully local: VoiceInk + Parakeet for ASR, Ollama + Qwen 3 for cleanup. |
+| [`dictation/`](dictation/) | Push-to-talk system-wide voice input (hold Fn → speak → release → text appears). Wispr-Flow-style UX, fully local: VoiceInk + Parakeet for ASR, optional Ollama + Qwen 3 for cleanup. |
+| [`voice-replies/`](voice-replies/) | Claude speaks responses aloud after each turn (Stop hook → markdown-stripped → macOS `say`). Tier 1 (MVP) shipped; Tier 2 routes through Chatterbox on the Jetson for premium quality (see [jetsonlocalai](https://github.com/bsduptime/jetsonlocalai)). |
 
-More stacks coming as I add them.
+Together, `dictation/` + `voice-replies/` close the voice loop with Claude Code — you talk, Claude responds aloud, you talk again. More stacks coming as I add them.
 
 ## Requirements
 
