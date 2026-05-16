@@ -42,6 +42,12 @@ There are two complementary triggers in this stack — pick whichever fits how y
 
 `~/.claude/hooks/voice-say "text" [voice]` — fire-and-forget. Returns in ~0.5s; audio plays in ~7-12s (GPU generation). Pre-narrate operations as you do them; the agent stays in full control of *when* and *what* gets spoken. This is what works well for granular, in-flight narration like "installing dependencies" / "tests pass, pushing now". No marker convention — just call the script when you want speech.
 
+**Three-tier fallback chain** — never silent unless every layer fails:
+
+1. **Primary URL** (LAN, default `http://192.168.1.200:18080`) with a 2s connect timeout.
+2. **Fallback URL** (Tailscale, default `http://100.99.130.79:18080`) — fast handoff when LAN is unreachable.
+3. **macOS `say`** (default voice `Samantha`) — last-resort audible fallback so you always hear *something*. Disable by setting `VOICE_SAY_FALLBACK_VOICE=none`.
+
 ```bash
 ~/.claude/hooks/voice-say "installing dependencies"
 ~/.claude/hooks/voice-say "tests pass, moving on" devnen-elena   # voice override
