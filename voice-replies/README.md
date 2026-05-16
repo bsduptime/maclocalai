@@ -7,11 +7,11 @@ Closes the voice loop with [`dictation/`](../dictation/): Claude speaks response
 | Tier | Status | Backend | Setup | Quality | Latency |
 |---|---|---|---|---|---|
 | 1 — MVP | **shipped** | **macOS `say`** | zero (built into macOS) | mediocre (decent with Siri voices) | instant |
-| 2 — Premium | **client shipped, server WIP** | **Chatterbox on Jetson (CUDA), HTTP to Mac** | server side: see [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) | best — beats ElevenLabs in blind tests (63.75%) | sub-200ms first sound (once server side is unblocked) |
+| 2 — Premium | **shipped** | **videngine TTS** (Chatterbox on Jetson, CUDA) | server lives in the content repo, hosted at `http://192.168.1.200:18080` | best — beats ElevenLabs in blind tests (63.75%); 36 voice profiles, voice cloning | ~7-12s per short line (GPU generation) |
 
 **No middle tier (Kokoro)** by design. Two clear choices keep the mental model simple.
 
-The Mac client supports both backends today. Tier 2 is gated on the Chatterbox server side — see the jetsonlocalai stack. The client **falls back to `say` automatically** if Chatterbox is unreachable, so switching backends never leaves you with silence.
+The client **falls back to `say` automatically** if the Chatterbox server is unreachable, so switching backends never leaves you with silence.
 
 ## Install
 
@@ -77,14 +77,33 @@ System Settings → Accessibility → Spoken Content → System Voice → click 
 
 Edit `~/.claude/settings.json` and remove the Stop hook entry that references `voice-reply.py`.
 
-## Tier 2 client (shipped) + server (WIP)
+## Tier 2 — videngine TTS
 
-The Mac side is ready — `voice-reply.py` already supports the `chatterbox` backend and `install.sh` will register it. What's gated is the server side, which lives in the [`chatterbox-tts-server`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) stack of jetsonlocalai. Once that's running on your Jetson (or any CUDA host), point the URL at it and you're in Tier 2.
+A single TTS service on the Jetson (`http://192.168.1.200:18080`) serves both this client and the videngine content pipeline. One CUDA process per Jetson is the safe pattern — see `feedback_jetson_one_cuda_process` memory.
 
-When you do graduate:
+### Voice catalogue
 
-- Pick a **non-you** Chatterbox voice reference for Claude (most people find AI-in-their-own-voice uncanny long-term).
-- The `say` fallback stays configured so any server hiccup doesn't leave you in silence.
+The server exposes 36 voices via `GET /voices`. Pick yours via `install.sh` (it probes the catalogue) or visit `http://192.168.1.200:18080/previews/` in a browser to listen to all of them.
+
+Categories:
+
+- **davidk-\*** — David's own recordings (8 voices). Good for narration *as* David. **Avoid for Claude** — most people find AI-in-their-own-voice uncanny long-term.
+- **devnen-\*** — devnen/Chatterbox-TTS-Server pack, MIT-licensed (28 voices, mix of male/female). Recommended for Claude.
+
+Two vetted picks for Claude:
+- `devnen-austin` — male, calm. Assistant tone. **Default.**
+- `devnen-elena` — female, dramatic.
+
+### Optional tunables (env vars)
+
+| Var | Range | Server default | What it does |
+|---|---|---|---|
+| `CHATTERBOX_EXAGGERATION` | 0.25–2.0 | 0.5 | Emotion intensity. ↑ for excited, ↓ for monotone. |
+| `CHATTERBOX_CFG_WEIGHT` | 0.0–1.0 | 0.5 | Closest to a speed knob. ↓ = snappier, ↑ = more deliberate. |
+| `CHATTERBOX_TEMPERATURE` | 0.05–1.5 | 0.8 | Sampling variety. ↓ = consistent, ↑ = varied. |
+| `CHATTERBOX_SEED` | int | random | Set for reproducible output. |
+
+Leave them unset and the server picks sensible defaults.
 
 ## Env vars (for reference)
 
@@ -93,8 +112,12 @@ When you do graduate:
 | `VOICE_REPLY_BACKEND` | both | `say` (default) or `chatterbox` |
 | `VOICE_REPLY_VOICE` | say / fallback | macOS voice name (default `Samantha`) |
 | `CHATTERBOX_URL` | chatterbox | e.g. `http://192.168.1.200:18080` |
-| `CHATTERBOX_VOICE` | chatterbox | voice name on the server (default `default`) |
+| `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-austin`) |
 | `CHATTERBOX_TOKEN` | chatterbox | optional bearer if the server requires auth |
+| `CHATTERBOX_EXAGGERATION` | chatterbox | optional float, see table above |
+| `CHATTERBOX_CFG_WEIGHT` | chatterbox | optional float, see table above |
+| `CHATTERBOX_TEMPERATURE` | chatterbox | optional float, see table above |
+| `CHATTERBOX_SEED` | chatterbox | optional int |
 
 ## See also
 

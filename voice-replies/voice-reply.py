@@ -6,9 +6,9 @@ the session transcript, strips markdown, and speaks it via one of two
 backends:
 
   - "say"        : macOS built-in `say` command (Tier 1 — zero install, mediocre voice)
-  - "chatterbox" : POST text to a Chatterbox TTS server (Tier 2 — natural,
-                   expressive voice; routes to a CUDA host like the Jetson
-                   over Tailscale or LAN)
+  - "chatterbox" : POST text to a videngine TTS server (Tier 2 — natural,
+                   voice-cloned via Chatterbox on a CUDA host like the
+                   Jetson, over Tailscale or LAN)
 
 Backend is picked via the VOICE_REPLY_BACKEND env var (default: "say").
 If "chatterbox" is configured but unreachable, falls back to "say" so the
@@ -17,11 +17,15 @@ exits 0 silently. Audio playback is detached, so the hook returns
 immediately and the user can start the next turn without waiting.
 
 Env vars:
-  VOICE_REPLY_BACKEND  "say" (default) or "chatterbox"
-  VOICE_REPLY_VOICE    voice name for `say` backend (default: Samantha)
-  CHATTERBOX_URL       e.g. http://192.168.1.200:18080
-  CHATTERBOX_VOICE     voice name for chatterbox (default: "default")
-  CHATTERBOX_TOKEN     optional bearer token if the server requires auth
+  VOICE_REPLY_BACKEND       "say" (default) or "chatterbox"
+  VOICE_REPLY_VOICE         voice name for `say` backend (default: Samantha)
+  CHATTERBOX_URL            e.g. http://192.168.1.200:18080
+  CHATTERBOX_VOICE          voice name from /voices (e.g. "devnen-austin")
+  CHATTERBOX_TOKEN          optional bearer token if the server requires auth
+  CHATTERBOX_EXAGGERATION   optional float 0.25-2.0 (server default 0.5)
+  CHATTERBOX_CFG_WEIGHT     optional float 0.0-1.0  (server default 0.5)
+  CHATTERBOX_TEMPERATURE    optional float 0.05-1.5 (server default 0.8)
+  CHATTERBOX_SEED           optional int for reproducibility
 """
 
 from __future__ import annotations
@@ -37,8 +41,8 @@ import urllib.request
 
 MAX_CHARS = 2000  # cap so unusually long responses don't read for minutes
 DEFAULT_SAY_VOICE = "Samantha"
-DEFAULT_CHATTERBOX_VOICE = "default"
-CHATTERBOX_TIMEOUT_SEC = 30  # POST timeout to the TTS server
+DEFAULT_CHATTERBOX_VOICE = "devnen-austin"  # vetted male calm, not David's voice
+CHATTERBOX_TIMEOUT_SEC = 60  # POST timeout to the TTS server (model gen can take a few seconds)
 
 
 def strip_markdown(text: str) -> str:
@@ -119,22 +123,56 @@ def speak_via_say(text: str, voice: str) -> None:
         proc.stdin.close()
 
 
+def _optional_float(name: str) -> float | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _optional_int(name: str) -> int | None:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
 def speak_via_chatterbox(
     text: str, url: str, voice: str, token: str | None
 ) -> bool:
-    """POST to /v1/audio/speech, write to a temp WAV, afplay it (detached).
+    """POST to the videngine TTS server's /synthesize, afplay the WAV.
 
     Returns True on success, False on any failure (so caller can fall back).
     """
-    body = json.dumps(
-        {"input": text, "voice": voice, "response_format": "wav"}
-    ).encode("utf-8")
+    payload: dict = {"text": text, "voice": voice}
+    # Optional tunables — only include if the env var is set; otherwise let
+    # the server pick its defaults (exaggeration 0.5, cfg_weight 0.5,
+    # temperature 0.8, seed random).
+    for env_name, key in (
+        ("CHATTERBOX_EXAGGERATION", "exaggeration"),
+        ("CHATTERBOX_CFG_WEIGHT", "cfg_weight"),
+        ("CHATTERBOX_TEMPERATURE", "temperature"),
+    ):
+        v = _optional_float(env_name)
+        if v is not None:
+            payload[key] = v
+    seed = _optional_int("CHATTERBOX_SEED")
+    if seed is not None:
+        payload["seed"] = seed
+
+    body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
     req = urllib.request.Request(
-        url.rstrip("/") + "/v1/audio/speech",
+        url.rstrip("/") + "/synthesize",
         data=body,
         headers=headers,
         method="POST",

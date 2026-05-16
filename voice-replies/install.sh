@@ -88,21 +88,49 @@ EOF
   ENV_VOICE="${VOICE}"
 
 else
-  # chatterbox
-  step "Configure Chatterbox TTS server."
+  # chatterbox (videngine TTS)
+  step "Configure videngine TTS (Chatterbox) server."
   read -r -p "Server URL (default http://192.168.1.200:18080): " CB_URL
   CB_URL="${CB_URL:-http://192.168.1.200:18080}"
-  read -r -p "Voice name (default 'default'): " CB_VOICE
-  CB_VOICE="${CB_VOICE:-default}"
-  read -r -p "Bearer token (optional, press enter to skip): " CB_TOKEN
 
   step "Probing ${CB_URL}/health"
   if curl -sf -m 5 "${CB_URL}/health" >/dev/null 2>&1; then
     echo "  reachable ✓"
+    VOICES_JSON=$(curl -sf -m 5 "${CB_URL}/voices" 2>/dev/null || echo "")
   else
     warn "  not reachable right now. Saving config anyway — the hook will"
     warn "  fall back to \`say\` automatically until the server is up."
+    VOICES_JSON=""
   fi
+
+  if [ -n "$VOICES_JSON" ]; then
+    step "Available voices (⭐ = vetted)"
+    echo "  Preview any voice in your browser: ${CB_URL}/previews/"
+    echo ""
+    python3 - "$VOICES_JSON" <<'PYEOF' || true
+import json, sys
+data = json.loads(sys.argv[1])
+voices = data.get("voices", [])
+# Show vetted first, then the rest grouped by source
+vetted = [v for v in voices if v.get("vetted")]
+other = [v for v in voices if not v.get("vetted")]
+print("  Vetted:")
+for v in vetted:
+    print(f"    ⭐ {v['name']}")
+print(f"  Other: {len(other)} more (see {data.get('count', len(voices))} total at /voices)")
+PYEOF
+    echo ""
+    read -r -p "Voice name (default 'devnen-austin' — vetted male calm): " CB_VOICE
+  else
+    echo ""
+    echo "  Common picks for a Claude voice (non-David, vetted by upstream):"
+    echo "    - devnen-austin   (male, calm — assistant tone)"
+    echo "    - devnen-elena    (female, dramatic)"
+    echo ""
+    read -r -p "Voice name (default 'devnen-austin'): " CB_VOICE
+  fi
+  CB_VOICE="${CB_VOICE:-devnen-austin}"
+  read -r -p "Bearer token (optional, press enter to skip): " CB_TOKEN
 
   ENV_LINE="VOICE_REPLY_BACKEND=chatterbox CHATTERBOX_URL=__URL__ CHATTERBOX_VOICE=__VOICE__"
   [ -n "$CB_TOKEN" ] && ENV_LINE="$ENV_LINE CHATTERBOX_TOKEN=__TOKEN__"
