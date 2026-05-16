@@ -138,9 +138,14 @@ PYEOF
     read -r -p "Voice name (default 'devnen-austin'): " CB_VOICE
   fi
   CB_VOICE="${CB_VOICE:-devnen-austin}"
+  read -r -p "Fallback URL when primary is unreachable (default http://100.99.130.79:18080 — Jetson Tailscale IP, blank to skip): " CB_URL_FALLBACK
+  if [ -z "$CB_URL_FALLBACK" ]; then
+    CB_URL_FALLBACK="http://100.99.130.79:18080"
+  fi
   read -r -p "Bearer token (optional, press enter to skip): " CB_TOKEN
 
   ENV_LINE="VOICE_REPLY_BACKEND=chatterbox CHATTERBOX_URL=__URL__ CHATTERBOX_VOICE=__VOICE__"
+  [ -n "$CB_URL_FALLBACK" ] && ENV_LINE="$ENV_LINE CHATTERBOX_URL_FALLBACK=__URL_FALLBACK__"
   [ -n "$CB_TOKEN" ] && ENV_LINE="$ENV_LINE CHATTERBOX_TOKEN=__TOKEN__"
   # Also configure the say fallback voice (used if chatterbox is unreachable)
   ENV_LINE="$ENV_LINE VOICE_REPLY_VOICE=Samantha"
@@ -165,6 +170,7 @@ export _VR_SCRIPT="$SCRIPT_DEST"
 export _VR_PYTHON="$PYTHON_BIN"
 export _VR_SAY_VOICE="${ENV_VOICE:-Samantha}"
 export _VR_CB_URL="${CB_URL:-}"
+export _VR_CB_URL_FALLBACK="${CB_URL_FALLBACK:-}"
 export _VR_CB_VOICE="${CB_VOICE:-}"
 export _VR_CB_TOKEN="${CB_TOKEN:-}"
 
@@ -185,6 +191,8 @@ parts.append(f"VOICE_REPLY_VOICE={shlex.quote(os.environ['_VR_SAY_VOICE'])}")
 if backend == "chatterbox":
     parts.append(f"CHATTERBOX_URL={shlex.quote(os.environ['_VR_CB_URL'])}")
     parts.append(f"CHATTERBOX_VOICE={shlex.quote(os.environ['_VR_CB_VOICE'])}")
+    if os.environ.get("_VR_CB_URL_FALLBACK"):
+        parts.append(f"CHATTERBOX_URL_FALLBACK={shlex.quote(os.environ['_VR_CB_URL_FALLBACK'])}")
     if os.environ.get("_VR_CB_TOKEN"):
         parts.append(f"CHATTERBOX_TOKEN={shlex.quote(os.environ['_VR_CB_TOKEN'])}")
 

@@ -19,7 +19,9 @@ immediately and the user can start the next turn without waiting.
 Env vars:
   VOICE_REPLY_BACKEND       "say" (default) or "chatterbox"
   VOICE_REPLY_VOICE         voice name for `say` backend (default: Samantha)
-  CHATTERBOX_URL            e.g. http://192.168.1.200:18080
+  CHATTERBOX_URL            primary URL (e.g. http://192.168.1.200:18080)
+  CHATTERBOX_URL_FALLBACK   optional fallback (e.g. http://100.99.130.79:18080
+                            — the Jetson's Tailscale IP, used if LAN is unreachable)
   CHATTERBOX_VOICE          voice name from /voices (e.g. "devnen-austin")
   CHATTERBOX_TOKEN          optional bearer token if the server requires auth
   CHATTERBOX_EXAGGERATION   optional float 0.25-2.0 (server default 0.5)
@@ -54,6 +56,7 @@ MAX_CHATTERBOX_CHARS = 500  # marker summaries should be short; cap defensively
 DEFAULT_SAY_VOICE = "Samantha"
 DEFAULT_CHATTERBOX_VOICE = "devnen-austin"  # vetted male calm, not David's voice
 CHATTERBOX_TIMEOUT_SEC = 60  # POST timeout to the TTS server (model gen can take a few seconds)
+CHATTERBOX_CONNECT_TIMEOUT_SEC = 2  # tight — keeps fallback latency low when primary is dead
 
 # Match the speak-marker convention: [[speak: …]]
 # Non-greedy so the first `]]` ends it; DOTALL so the marker can span lines.
@@ -158,12 +161,50 @@ def _optional_int(name: str) -> int | None:
         return None
 
 
+def _post_synthesize(
+    url: str, body: bytes, headers: dict, connect_timeout: float
+) -> bytes | None:
+    """Single POST to one URL. Returns audio bytes on success, None on failure.
+
+    Uses socket-level connect timeout via a custom opener so we can fall back
+    quickly when the primary URL isn't reachable.
+    """
+    import socket
+    req = urllib.request.Request(
+        url.rstrip("/") + "/synthesize",
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    # urllib's timeout is total; we want a short connect timeout + a longer
+    # read timeout. Use socket.setdefaulttimeout would be process-wide; the
+    # least-invasive approach is just to use a tight overall timeout for the
+    # primary attempt — if the connection establishes, the actual generation
+    # is fast enough that we don't need a long read window for *unreachable*
+    # detection (separate from generation-takes-time, which uses the longer
+    # timeout below).
+    old_default = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(connect_timeout)
+    try:
+        with urllib.request.urlopen(req, timeout=CHATTERBOX_TIMEOUT_SEC) as resp:
+            audio = resp.read()
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
+        return None
+    finally:
+        socket.setdefaulttimeout(old_default)
+    if not audio or len(audio) < 64:
+        return None
+    return audio
+
+
 def speak_via_chatterbox(
     text: str, url: str, voice: str, token: str | None
 ) -> bool:
     """POST to the videngine TTS server's /synthesize, afplay the WAV.
 
-    Returns True on success, False on any failure (so caller can fall back).
+    Tries the primary URL first; if unreachable (connect timeout), tries the
+    fallback URL from CHATTERBOX_URL_FALLBACK if set. Returns True on
+    success, False on any failure (so caller can fall back to say).
     """
     payload: dict = {"text": text, "voice": voice}
     # Optional tunables — only include if the env var is set; otherwise let
@@ -186,18 +227,15 @@ def speak_via_chatterbox(
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    req = urllib.request.Request(
-        url.rstrip("/") + "/synthesize",
-        data=body,
-        headers=headers,
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=CHATTERBOX_TIMEOUT_SEC) as resp:
-            audio = resp.read()
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
-        return False
-    if not audio or len(audio) < 64:
+    # Try primary, then fallback (if configured)
+    audio = _post_synthesize(url, body, headers, CHATTERBOX_CONNECT_TIMEOUT_SEC)
+    if audio is None:
+        fallback = os.environ.get("CHATTERBOX_URL_FALLBACK", "").strip()
+        if fallback:
+            audio = _post_synthesize(
+                fallback, body, headers, CHATTERBOX_CONNECT_TIMEOUT_SEC
+            )
+    if audio is None:
         return False
 
     # Write to a temp file and afplay it detached

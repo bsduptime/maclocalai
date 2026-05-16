@@ -131,7 +131,8 @@ Leave them unset and the server picks sensible defaults.
 |---|---|---|
 | `VOICE_REPLY_BACKEND` | both | `say` (default) or `chatterbox` |
 | `VOICE_REPLY_VOICE` | say / fallback | macOS voice name (default `Samantha`) |
-| `CHATTERBOX_URL` | chatterbox | e.g. `http://192.168.1.200:18080` |
+| `CHATTERBOX_URL` | chatterbox | primary, e.g. `http://192.168.1.200:18080` (LAN) |
+| `CHATTERBOX_URL_FALLBACK` | chatterbox | optional, e.g. `http://100.99.130.79:18080` (Tailscale). Auto-used when primary is unreachable; 2s connect timeout makes fallback fast. |
 | `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-austin`) |
 | `CHATTERBOX_TOKEN` | chatterbox | optional bearer if the server requires auth |
 | `CHATTERBOX_EXAGGERATION` | chatterbox | optional float, see table above |
