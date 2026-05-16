@@ -13,10 +13,19 @@
 #   $4  cfg_weight 0.0-1.0   (optional)
 #   $5  temperature 0.05-1.5 (optional)
 #
-# Returns immediately. Audio plays in the background via afplay.
-# Any in-flight afplay is killed first so voices don't stack.
-# Silent on failure (server unreachable, etc.) — by design; this is a
-# convenience tool, not a critical path.
+# Env (override the URLs / fallback voice if needed):
+#   VIDENGINE_TTS_URL          primary URL (default: http://192.168.1.200:18080 — LAN)
+#   VIDENGINE_TTS_URL_FALLBACK fallback URL (default: http://100.99.130.79:18080 — Tailscale)
+#   VOICE_SAY_FALLBACK_VOICE   macOS `say` voice for last-resort fallback (default: Samantha).
+#                              Set to "none" to disable the say fallback and stay silent.
+#
+# Three-tier fallback chain — never silent unless every layer fails:
+#   1. POST to $VIDENGINE_TTS_URL          (LAN, 2s connect timeout)
+#   2. POST to $VIDENGINE_TTS_URL_FALLBACK (Tailscale, 2s connect timeout)
+#   3. say -v $VOICE_SAY_FALLBACK_VOICE    (mediocre but audible)
+#
+# Returns immediately. Audio plays in the background via afplay (or say at
+# tier 3). Any in-flight afplay/say is killed first so voices don't stack.
 
 set -u
 TEXT="${1:-}"
@@ -24,7 +33,9 @@ VOICE="${2:-devnen-austin}"
 EXAG="${3:-}"
 CFG="${4:-}"
 TEMP="${5:-}"
-URL="${VIDENGINE_TTS_URL:-http://192.168.1.200:18080}"
+URL_PRIMARY="${VIDENGINE_TTS_URL:-http://192.168.1.200:18080}"
+URL_FALLBACK="${VIDENGINE_TTS_URL_FALLBACK:-http://100.99.130.79:18080}"
+SAY_FALLBACK_VOICE="${VOICE_SAY_FALLBACK_VOICE:-Samantha}"
 
 if [ -z "$TEXT" ]; then
   echo "usage: voice-say \"text\" [voice] [exaggeration] [cfg_weight] [temperature]" >&2
@@ -45,16 +56,27 @@ print(json.dumps(d))
 
 TMP=$(mktemp -t voice-say.XXXXXX.wav)
 (
-  # Fetch synth + play, detached so the caller returns immediately
-  if curl -sf -m 60 -X POST "$URL/synthesize" \
-      -H "Content-Type: application/json" \
-      -d "$PAYLOAD" \
-      --output "$TMP" 2>/dev/null && [ -s "$TMP" ]; then
-    pkill -x afplay 2>/dev/null
+  # Tier 1: primary (LAN) with a tight connect timeout for quick fallback
+  if curl -sf --connect-timeout 2 -m 60 -X POST "$URL_PRIMARY/synthesize" \
+        -H "Content-Type: application/json" -d "$PAYLOAD" \
+        --output "$TMP" 2>/dev/null && [ -s "$TMP" ]; then
+    pkill -x afplay say 2>/dev/null
     afplay "$TMP" 2>/dev/null
     rm -f "$TMP"
+  # Tier 2: fallback URL (Tailscale)
+  elif curl -sf --connect-timeout 2 -m 60 -X POST "$URL_FALLBACK/synthesize" \
+        -H "Content-Type: application/json" -d "$PAYLOAD" \
+        --output "$TMP" 2>/dev/null && [ -s "$TMP" ]; then
+    pkill -x afplay say 2>/dev/null
+    afplay "$TMP" 2>/dev/null
+    rm -f "$TMP"
+  # Tier 3: macOS say (audible last resort; opt out via VOICE_SAY_FALLBACK_VOICE=none)
   else
     rm -f "$TMP"
+    if [ "$SAY_FALLBACK_VOICE" != "none" ] && command -v say >/dev/null 2>&1; then
+      pkill -x afplay say 2>/dev/null
+      say -v "$SAY_FALLBACK_VOICE" "$TEXT" 2>/dev/null
+    fi
   fi
 ) </dev/null >/dev/null 2>&1 &
 disown 2>/dev/null || true
