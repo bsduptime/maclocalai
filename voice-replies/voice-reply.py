@@ -26,6 +26,16 @@ Env vars:
   CHATTERBOX_CFG_WEIGHT     optional float 0.0-1.0  (server default 0.5)
   CHATTERBOX_TEMPERATURE    optional float 0.05-1.5 (server default 0.8)
   CHATTERBOX_SEED           optional int for reproducibility
+
+Speak marker convention:
+  If the assistant response contains `[[speak: …]]`, only that text is
+  spoken (and any markdown inside it is stripped). This lets the model
+  write a short audio-appropriate summary alongside a long text answer.
+
+  When no marker is present:
+    - say backend: speaks the full text (fast + free, current behavior)
+    - chatterbox backend: silent (skip the 7-12s call rather than read
+      the wall of text). Add a marker if you want it spoken.
 """
 
 from __future__ import annotations
@@ -40,9 +50,14 @@ import urllib.error
 import urllib.request
 
 MAX_CHARS = 2000  # cap so unusually long responses don't read for minutes
+MAX_CHATTERBOX_CHARS = 500  # marker summaries should be short; cap defensively
 DEFAULT_SAY_VOICE = "Samantha"
 DEFAULT_CHATTERBOX_VOICE = "devnen-austin"  # vetted male calm, not David's voice
 CHATTERBOX_TIMEOUT_SEC = 60  # POST timeout to the TTS server (model gen can take a few seconds)
+
+# Match the speak-marker convention: [[speak: …]]
+# Non-greedy so the first `]]` ends it; DOTALL so the marker can span lines.
+SPEAK_MARKER_RE = re.compile(r"\[\[speak:\s*(.+?)\]\]", re.DOTALL | re.IGNORECASE)
 
 
 def strip_markdown(text: str) -> str:
@@ -222,18 +237,33 @@ def main() -> int:
     if not transcript_path:
         return 0
 
-    text = get_last_assistant_text(transcript_path)
-    if not text:
+    raw_text = get_last_assistant_text(transcript_path)
+    if not raw_text:
         return 0
 
-    text = strip_markdown(text)
-    if not text:
-        return 0
-
-    if len(text) > MAX_CHARS:
-        text = text[:MAX_CHARS] + " (truncated)"
-
+    # Speak-marker takes priority. Extract before stripping markdown so we
+    # don't accidentally mangle the `[[speak: …]]` syntax.
+    marker = SPEAK_MARKER_RE.search(raw_text)
     backend = os.environ.get("VOICE_REPLY_BACKEND", "say").lower()
+
+    if marker:
+        speak_text = strip_markdown(marker.group(1))
+        if not speak_text:
+            return 0
+        if len(speak_text) > MAX_CHATTERBOX_CHARS:
+            speak_text = speak_text[:MAX_CHATTERBOX_CHARS]
+    else:
+        # No marker. Backend-specific policy:
+        #   say:        speak the full text (fast + free)
+        #   chatterbox: be silent (skip the costly call; user can add a
+        #               marker next turn if they want audio)
+        if backend == "chatterbox":
+            return 0
+        speak_text = strip_markdown(raw_text)
+        if not speak_text:
+            return 0
+        if len(speak_text) > MAX_CHARS:
+            speak_text = speak_text[:MAX_CHARS] + " (truncated)"
 
     kill_in_flight_audio()
 
@@ -241,13 +271,13 @@ def main() -> int:
         url = os.environ.get("CHATTERBOX_URL", "").strip()
         voice = os.environ.get("CHATTERBOX_VOICE", DEFAULT_CHATTERBOX_VOICE)
         token = os.environ.get("CHATTERBOX_TOKEN", "").strip() or None
-        if url and speak_via_chatterbox(text, url, voice, token):
+        if url and speak_via_chatterbox(speak_text, url, voice, token):
             return 0
         # Fall through to `say` if chatterbox is unreachable / failed
 
     voice = os.environ.get("VOICE_REPLY_VOICE", DEFAULT_SAY_VOICE)
     try:
-        speak_via_say(text, voice)
+        speak_via_say(speak_text, voice)
     except Exception:
         pass
     return 0
