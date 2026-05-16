@@ -117,8 +117,8 @@ Categories:
 - **devnen-\*** — devnen/Chatterbox-TTS-Server pack, MIT-licensed (28 voices, mix of male/female). Recommended for Claude.
 
 Two vetted picks for Claude:
-- `devnen-austin` — male, calm. Assistant tone. **Default.**
-- `devnen-elena` — female, dramatic.
+- `devnen-elena` — female, dramatic. **Default.**
+- `devnen-austin` — male, calm.
 
 ### Optional tunables (env vars)
 
@@ -139,7 +139,7 @@ Leave them unset and the server picks sensible defaults.
 | `VOICE_REPLY_VOICE` | say / fallback | macOS voice name (default `Samantha`) |
 | `CHATTERBOX_URL` | chatterbox | primary, e.g. `http://192.168.1.200:18080` (LAN) |
 | `CHATTERBOX_URL_FALLBACK` | chatterbox | optional, e.g. `http://100.99.130.79:18080` (Tailscale). Auto-used when primary is unreachable; 2s connect timeout makes fallback fast. |
-| `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-austin`) |
+| `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-elena`) |
 | `CHATTERBOX_TOKEN` | chatterbox | optional bearer if the server requires auth |
 | `CHATTERBOX_EXAGGERATION` | chatterbox | optional float, see table above |
 | `CHATTERBOX_CFG_WEIGHT` | chatterbox | optional float, see table above |

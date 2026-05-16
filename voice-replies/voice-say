@@ -3,12 +3,12 @@
 #
 # Usage:
 #   voice-say "the text to speak"
-#   voice-say "the text" devnen-elena              # pick a voice
+#   voice-say "the text" devnen-austin             # pick a voice
 #   voice-say "the text" devnen-austin 1.2 0.3     # voice + exaggeration + cfg_weight
 #
 # Args:
 #   $1  text (required)
-#   $2  voice from /voices (default: devnen-austin)
+#   $2  voice from /voices (default: devnen-elena)
 #   $3  exaggeration 0.25-2.0 (optional)
 #   $4  cfg_weight 0.0-1.0   (optional)
 #   $5  temperature 0.05-1.5 (optional)
@@ -29,7 +29,7 @@
 
 set -u
 TEXT="${1:-}"
-VOICE="${2:-devnen-austin}"
+VOICE="${2:-devnen-elena}"
 EXAG="${3:-}"
 CFG="${4:-}"
 TEMP="${5:-}"

@@ -128,16 +128,16 @@ for v in vetted:
 print(f"  Other: {len(other)} more (see {data.get('count', len(voices))} total at /voices)")
 PYEOF
     echo ""
-    read -r -p "Voice name (default 'devnen-austin' — vetted male calm): " CB_VOICE
+    read -r -p "Voice name (default 'devnen-elena' — vetted female): " CB_VOICE
   else
     echo ""
     echo "  Common picks for a Claude voice (non-David, vetted by upstream):"
-    echo "    - devnen-austin   (male, calm — assistant tone)"
-    echo "    - devnen-elena    (female, dramatic)"
+    echo "    - devnen-elena    (female, dramatic — assistant default)"
+    echo "    - devnen-austin   (male, calm)"
     echo ""
-    read -r -p "Voice name (default 'devnen-austin'): " CB_VOICE
+    read -r -p "Voice name (default 'devnen-elena'): " CB_VOICE
   fi
-  CB_VOICE="${CB_VOICE:-devnen-austin}"
+  CB_VOICE="${CB_VOICE:-devnen-elena}"
   read -r -p "Fallback URL when primary is unreachable (default http://100.99.130.79:18080 — Jetson Tailscale IP, blank to skip): " CB_URL_FALLBACK
   if [ -z "$CB_URL_FALLBACK" ]; then
     CB_URL_FALLBACK="http://100.99.130.79:18080"

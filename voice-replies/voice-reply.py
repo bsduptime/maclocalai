@@ -54,7 +54,7 @@ import urllib.request
 MAX_CHARS = 2000  # cap so unusually long responses don't read for minutes
 MAX_CHATTERBOX_CHARS = 500  # marker summaries should be short; cap defensively
 DEFAULT_SAY_VOICE = "Samantha"
-DEFAULT_CHATTERBOX_VOICE = "devnen-austin"  # vetted male calm, not David's voice
+DEFAULT_CHATTERBOX_VOICE = "devnen-elena"  # vetted female dramatic, not David's voice
 CHATTERBOX_TIMEOUT_SEC = 60  # POST timeout to the TTS server (model gen can take a few seconds)
 CHATTERBOX_CONNECT_TIMEOUT_SEC = 2  # tight — keeps fallback latency low when primary is dead
 
