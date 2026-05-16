@@ -7,26 +7,34 @@ Closes the voice loop with [`dictation/`](../dictation/): Claude speaks response
 | Tier | Status | Backend | Setup | Quality | Latency |
 |---|---|---|---|---|---|
 | 1 — MVP | **shipped** | **macOS `say`** | zero (built into macOS) | mediocre (decent with Siri voices) | instant |
-| 2 — Premium | planned | **Chatterbox on Jetson (CUDA), Tailscale to Mac** | see [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) | best — beats ElevenLabs in blind tests (63.75%) | sub-200ms first sound |
+| 2 — Premium | **client shipped, server WIP** | **Chatterbox on Jetson (CUDA), HTTP to Mac** | server side: see [`jetsonlocalai/chatterbox-tts-server/`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) | best — beats ElevenLabs in blind tests (63.75%) | sub-200ms first sound (once server side is unblocked) |
 
 **No middle tier (Kokoro)** by design. Two clear choices keep the mental model simple.
 
-## Tier 1: install (shipped)
+The Mac client supports both backends today. Tier 2 is gated on the Chatterbox server side — see the jetsonlocalai stack. The client **falls back to `say` automatically** if Chatterbox is unreachable, so switching backends never leaves you with silence.
+
+## Install
 
 ```bash
 bash install.sh
 ```
 
-The installer:
+The installer asks which backend you want:
+
+- **`say`** (Tier 1) — picks a voice, tests it, registers the hook
+- **`chatterbox`** (Tier 2) — asks for the server URL (default `http://192.168.1.200:18080`), voice name, optional bearer token; probes `/health`; registers the hook with chatterbox + a `say` fallback config
+
+Either way the installer:
 
 1. Copies `voice-reply.py` to `~/.claude/hooks/`
-2. Lets you pick a voice (and falls back to Samantha if the chosen voice isn't installed)
-3. Tests the voice ("Hello from voice replies.")
-4. Registers a Stop hook in `~/.claude/settings.json` (backs up the existing file first)
+2. Backs up `~/.claude/settings.json` first
+3. Registers / updates the Stop hook (won't duplicate if you re-run)
 
 **Take-effect:** start a new Claude Code session. Existing sessions don't pick up newly-registered hooks.
 
-## How Tier 1 works
+You can re-run `install.sh` any time to switch backends or change voice.
+
+## How it works
 
 ```
 Claude finishes a turn
@@ -39,13 +47,17 @@ voice-reply.py:
   4. Strips markdown (headers, bold, links, code blocks, tables, emoji)
   5. Drops the trailing "Sources:" section
   6. Caps at 2000 characters
-  7. Backgrounds `say -v <voice>` so it doesn't block the next turn
+  7. Kills any in-flight audio (say / afplay)
+  8. Speaks via the configured backend:
+       say        → backgrounded `say -v <voice>`
+       chatterbox → POST to /v1/audio/speech, afplay the returned WAV
+                    (falls back to `say` if the server is unreachable)
     │
     ▼
 audio out (speakers / AirPods)
 ```
 
-If a new Claude turn starts before previous speech finishes, the script kills the in-flight `say` and starts the new one — no overlapping voices.
+If a new Claude turn starts before previous speech finishes, the script kills the in-flight `say` / `afplay` so voices don't overlap.
 
 ## Changing voice later
 
@@ -65,15 +77,24 @@ System Settings → Accessibility → Spoken Content → System Voice → click 
 
 Edit `~/.claude/settings.json` and remove the Stop hook entry that references `voice-reply.py`.
 
-## Tier 2 (planned)
+## Tier 2 client (shipped) + server (WIP)
 
-When you graduate from `say` to wanting better voice quality:
+The Mac side is ready — `voice-reply.py` already supports the `chatterbox` backend and `install.sh` will register it. What's gated is the server side, which lives in the [`chatterbox-tts-server`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) stack of jetsonlocalai. Once that's running on your Jetson (or any CUDA host), point the URL at it and you're in Tier 2.
 
-1. Stand up [`chatterbox-tts-server`](https://github.com/bsduptime/jetsonlocalai/tree/main/chatterbox-tts-server) on the Jetson.
-2. Replace the `say` call in `voice-reply.py` with an HTTP POST to the Jetson server.
-3. Pick a non-you Chatterbox voice reference for Claude (most people find AI-in-their-own-voice uncanny long-term).
+When you do graduate:
 
-This stack will ship a Tier 2 variant once that server exists.
+- Pick a **non-you** Chatterbox voice reference for Claude (most people find AI-in-their-own-voice uncanny long-term).
+- The `say` fallback stays configured so any server hiccup doesn't leave you in silence.
+
+## Env vars (for reference)
+
+| Var | Used by | Notes |
+|---|---|---|
+| `VOICE_REPLY_BACKEND` | both | `say` (default) or `chatterbox` |
+| `VOICE_REPLY_VOICE` | say / fallback | macOS voice name (default `Samantha`) |
+| `CHATTERBOX_URL` | chatterbox | e.g. `http://192.168.1.200:18080` |
+| `CHATTERBOX_VOICE` | chatterbox | voice name on the server (default `default`) |
+| `CHATTERBOX_TOKEN` | chatterbox | optional bearer if the server requires auth |
 
 ## See also
 
