@@ -31,6 +31,14 @@ step "Copying voice-reply.py to ${SCRIPT_DEST}"
 cp "${THIS_DIR}/voice-reply.py" "${SCRIPT_DEST}"
 chmod +x "${SCRIPT_DEST}"
 
+# Always install the voice-say wrapper too — it's the recommended pattern
+# for deliberate, in-flight narration (vs. the auto-on-every-turn Stop hook).
+# Costs nothing if unused.
+VOICE_SAY_DEST="${HOOKS_DIR}/voice-say"
+step "Copying voice-say wrapper to ${VOICE_SAY_DEST}"
+cp "${THIS_DIR}/voice-say" "${VOICE_SAY_DEST}"
+chmod +x "${VOICE_SAY_DEST}"
+
 # ----------------------------- Backend pick ---------------------------------
 
 step "Pick a backend."

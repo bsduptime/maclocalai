@@ -34,6 +34,26 @@ Either way the installer:
 
 You can re-run `install.sh` any time to switch backends or change voice.
 
+## Two ways to trigger speech
+
+There are two complementary triggers in this stack — pick whichever fits how you want voice to behave:
+
+### A. Manual wrapper (recommended for chatterbox)
+
+`~/.claude/hooks/voice-say "text" [voice]` — fire-and-forget. Returns in ~0.5s; audio plays in ~7-12s (GPU generation). Pre-narrate operations as you do them; the agent stays in full control of *when* and *what* gets spoken. This is what works well for granular, in-flight narration like "installing dependencies" / "tests pass, pushing now". No marker convention — just call the script when you want speech.
+
+```bash
+~/.claude/hooks/voice-say "installing dependencies"
+~/.claude/hooks/voice-say "tests pass, moving on" devnen-elena   # voice override
+~/.claude/hooks/voice-say "dramatic line" devnen-austin 1.2 0.3  # voice + exaggeration + cfg_weight
+```
+
+### B. Stop hook (Tier 1 `say` only, mostly)
+
+Auto-fires on every turn end. Reads the response (or just the `[[speak: …]]` marker if present) through the configured backend. Good for the fast/free `say` backend where reading the full text on every turn is tolerable. **Less good for chatterbox** — the 7-12s call on every turn-end gets in the way and collides with audio you generated yourself in the same turn. For chatterbox, prefer the wrapper.
+
+If you do want the hook on chatterbox: the script extracts `[[speak: …]]` from the response and speaks only that; without a marker the chatterbox backend stays silent (so it never reads the wall of text).
+
 ## How it works
 
 ```

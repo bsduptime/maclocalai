@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# voice-say — fire-and-forget TTS via the videngine server on the Jetson.
+#
+# Usage:
+#   voice-say "the text to speak"
+#   voice-say "the text" devnen-elena              # pick a voice
+#   voice-say "the text" devnen-austin 1.2 0.3     # voice + exaggeration + cfg_weight
+#
+# Args:
+#   $1  text (required)
+#   $2  voice from /voices (default: devnen-austin)
+#   $3  exaggeration 0.25-2.0 (optional)
+#   $4  cfg_weight 0.0-1.0   (optional)
+#   $5  temperature 0.05-1.5 (optional)
+#
+# Returns immediately. Audio plays in the background via afplay.
+# Any in-flight afplay is killed first so voices don't stack.
+# Silent on failure (server unreachable, etc.) — by design; this is a
+# convenience tool, not a critical path.
+
+set -u
+TEXT="${1:-}"
+VOICE="${2:-devnen-austin}"
+EXAG="${3:-}"
+CFG="${4:-}"
+TEMP="${5:-}"
+URL="${VIDENGINE_TTS_URL:-http://192.168.1.200:18080}"
+
+if [ -z "$TEXT" ]; then
+  echo "usage: voice-say \"text\" [voice] [exaggeration] [cfg_weight] [temperature]" >&2
+  exit 2
+fi
+
+# Build JSON safely via python3 (handles quotes/newlines in TEXT properly)
+PAYLOAD=$(VOICE="$VOICE" TEXT="$TEXT" EXAG="$EXAG" CFG="$CFG" TEMP="$TEMP" python3 -c '
+import json, os
+d = {"text": os.environ["TEXT"], "voice": os.environ["VOICE"]}
+for env, key in (("EXAG","exaggeration"),("CFG","cfg_weight"),("TEMP","temperature")):
+    v = os.environ.get(env, "").strip()
+    if v:
+        try: d[key] = float(v)
+        except ValueError: pass
+print(json.dumps(d))
+')
+
+TMP=$(mktemp -t voice-say.XXXXXX.wav)
+(
+  # Fetch synth + play, detached so the caller returns immediately
+  if curl -sf -m 60 -X POST "$URL/synthesize" \
+      -H "Content-Type: application/json" \
+      -d "$PAYLOAD" \
+      --output "$TMP" 2>/dev/null && [ -s "$TMP" ]; then
+    pkill -x afplay 2>/dev/null
+    afplay "$TMP" 2>/dev/null
+    rm -f "$TMP"
+  else
+    rm -f "$TMP"
+  fi
+) </dev/null >/dev/null 2>&1 &
+disown 2>/dev/null || true
+exit 0
