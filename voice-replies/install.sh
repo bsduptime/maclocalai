@@ -56,7 +56,7 @@ else
   echo "    The shared repo->voice map lives in the jetsonlocalai repo. To enable"
   echo "    per-repo narration voices, run that repo's installer:"
   echo "      bash <jetsonlocalai>/voice-replies/install.sh"
-  echo "    Without it, narration uses the default voice (devnen-elena) everywhere."
+  echo "    Without it, narration uses the default voice (devnen-eli) everywhere."
 fi
 
 # ----------------------------- Backend pick ---------------------------------
@@ -148,16 +148,17 @@ for v in vetted:
 print(f"  Other: {len(other)} more (see {data.get('count', len(voices))} total at /voices)")
 PYEOF
     echo ""
-    read -r -p "Voice name (default 'devnen-elena' — vetted female): " CB_VOICE
+    read -r -p "Voice name (default 'devnen-eli'): " CB_VOICE
   else
     echo ""
-    echo "  Common picks for a Claude voice (non-David, vetted by upstream):"
-    echo "    - devnen-elena    (female, dramatic — assistant default)"
+    echo "  Common picks for a Claude voice (non-David, vetted):"
+    echo "    - devnen-eli      (default)"
     echo "    - devnen-austin   (male, calm)"
+    echo "    (devnen-elena is reserved for the hermes agent — don't reuse it)"
     echo ""
-    read -r -p "Voice name (default 'devnen-elena'): " CB_VOICE
+    read -r -p "Voice name (default 'devnen-eli'): " CB_VOICE
   fi
-  CB_VOICE="${CB_VOICE:-devnen-elena}"
+  CB_VOICE="${CB_VOICE:-devnen-eli}"
   read -r -p "Fallback URL when primary is unreachable (default http://100.99.130.79:18080 — Jetson Tailscale IP, blank to skip): " CB_URL_FALLBACK
   if [ -z "$CB_URL_FALLBACK" ]; then
     CB_URL_FALLBACK="http://100.99.130.79:18080"

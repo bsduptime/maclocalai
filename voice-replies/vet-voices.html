@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>voice vetting — videngine TTS</title>
+<style>
+  :root {
+    --bg:#0f1115; --card:#181b22; --card2:#1f2530; --line:#2a2f3a;
+    --fg:#e7ebf0; --mut:#9aa4b2; --acc:#6ea8fe;
+    --keep:#3ecf8e; --maybe:#e4b53e; --cut:#e4574c;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:rgba(15,17,21,.92);
+           backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+           padding:14px 20px; }
+  h1 { margin:0 0 4px; font-size:18px; }
+  .sub { color:var(--mut); font-size:13px; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .bar label { color:var(--mut); font-size:12px; }
+  button, select, input[type=text] {
+    background:var(--card2); color:var(--fg); border:1px solid var(--line);
+    border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer; }
+  input[type=text] { cursor:text; min-width:220px; }
+  button:hover { border-color:var(--acc); }
+  .seg button.on { border-color:var(--acc); color:var(--acc); }
+  main { padding:20px; max-width:1100px; margin:0 auto; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.08em;
+       color:var(--mut); margin:28px 0 10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:12px 14px; }
+  .card.keep { border-color:var(--keep); }
+  .card.maybe { border-color:var(--maybe); }
+  .card.cut { border-color:var(--cut); opacity:.7; }
+  .row1 { display:flex; align-items:center; gap:8px; }
+  .name { font-weight:600; font-size:14px; }
+  .tag { font-size:10px; padding:2px 6px; border-radius:6px; border:1px solid var(--line);
+         color:var(--mut); text-transform:uppercase; letter-spacing:.04em; }
+  .tag.vet { color:#0f1115; background:var(--keep); border-color:var(--keep); }
+  .tag.use { color:#0f1115; background:var(--acc); border-color:var(--acc); }
+  audio { width:100%; margin-top:8px; height:34px; }
+  .verdict { display:flex; gap:6px; margin-top:8px; }
+  .verdict button { flex:1; }
+  .verdict button.on.k { background:var(--keep); color:#0f1115; border-color:var(--keep); }
+  .verdict button.on.m { background:var(--maybe); color:#0f1115; border-color:var(--maybe); }
+  .verdict button.on.c { background:var(--cut); color:#0f1115; border-color:var(--cut); }
+  .note { width:100%; margin-top:8px; }
+  .err { color:var(--cut); font-size:11px; margin-top:6px; display:none; }
+  .card.broken .err { display:block; }
+  dialog { background:var(--card); color:var(--fg); border:1px solid var(--line);
+           border-radius:12px; max-width:680px; width:92%; }
+  dialog textarea { width:100%; height:300px; background:var(--bg); color:var(--fg);
+                    border:1px solid var(--line); border-radius:8px; padding:10px;
+                    font-family:ui-monospace,Menlo,monospace; font-size:12px; }
+  .count { color:var(--mut); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>voice vetting · videngine TTS</h1>
+  <div class="sub">Play the sample for each voice, mark <b>keep / maybe / cut</b>, jot a note, then <b>Export</b> and paste it back to Claude. Saved in this browser automatically.</div>
+  <div class="bar">
+    <label>server</label>
+    <span class="seg" id="seg">
+      <button data-base="http://100.99.130.79:18080">Tailscale</button>
+      <button data-base="http://192.168.1.200:18080">LAN</button>
+    </span>
+    <input type="text" id="customBase" placeholder="or custom base URL…">
+    <span style="flex:1"></span>
+    <span class="count" id="count"></span>
+    <button id="export">Export verdicts ▸</button>
+    <button id="reset" title="clear all ratings/notes">reset</button>
+  </div>
+</header>
+<main id="main"></main>
+
+<dialog id="dlg">
+  <h3 style="margin-top:0">Verdicts — copy this to Claude</h3>
+  <textarea id="out" readonly></textarea>
+  <div style="margin-top:10px; display:flex; gap:8px;">
+    <button id="copy">Copy to clipboard</button>
+    <button id="close">Close</button>
+  </div>
+</dialog>
+
+<script>
+// --- voice catalogue (36) ---------------------------------------------------
+// vetted + which are currently assigned in voice-profiles.
+const VETTED = new Set(["davidk-drive","davidk-steady","devnen-austin","devnen-elena"]);
+const INUSE  = new Set(["devnen-austin","devnen-alice","devnen-julian","devnen-leonardo",
+                        "devnen-michael","devnen-jeremiah","devnen-eli"]);
+const DAVIDK = ["davidk-drive","davidk-drive-wonder","davidk-high-intensity-drive",
+  "davidk-reflective-calm","davidk-steady","davidk-steady-empathy","davidk-tension",
+  "davidk-tension-vulnerability"];
+const DEVNEN = ["devnen-abigail","devnen-adrian","devnen-alexander","devnen-alice","devnen-austin",
+  "devnen-axel","devnen-connor","devnen-cora","devnen-elena","devnen-eli","devnen-emily",
+  "devnen-everett","devnen-gabriel","devnen-gianna","devnen-henry","devnen-ian","devnen-jade",
+  "devnen-jeremiah","devnen-jordan","devnen-julian","devnen-layla","devnen-leonardo","devnen-michael",
+  "devnen-miles","devnen-olivia","devnen-ryan","devnen-taylor","devnen-thomas"];
+
+const LS_VERDICT = "voicevet.verdicts.v1";
+const LS_BASE = "voicevet.base.v1";
+const state = JSON.parse(localStorage.getItem(LS_VERDICT) || "{}");
+let base = localStorage.getItem(LS_BASE) || "http://100.99.130.79:18080";
+
+function save(){ localStorage.setItem(LS_VERDICT, JSON.stringify(state)); refreshCount(); }
+function setBase(b){ base = b.replace(/\/+$/,""); localStorage.setItem(LS_BASE, base); render(); syncSeg(); }
+
+function card(name){
+  const v = state[name] || {};
+  const el = document.createElement("div");
+  el.className = "card" + (v.rate ? " "+v.rate : "");
+  el.dataset.name = name;
+  const tags = [];
+  if (VETTED.has(name)) tags.push('<span class="tag vet">vetted</span>');
+  if (INUSE.has(name))  tags.push('<span class="tag use">in use</span>');
+  el.innerHTML = `
+    <div class="row1"><span class="name">${name}</span> ${tags.join(" ")}</div>
+    <audio controls preload="none" src="${base}/previews/${name}.wav"></audio>
+    <div class="err">⚠ sample didn't load — try the other server (Tailscale/LAN) above.</div>
+    <div class="verdict">
+      <button class="k ${v.rate==='keep'?'on':''}" data-r="keep">👍 keep</button>
+      <button class="m ${v.rate==='maybe'?'on':''}" data-r="maybe">🤔 maybe</button>
+      <button class="c ${v.rate==='cut'?'on':''}" data-r="cut">👎 cut</button>
+    </div>
+    <input class="note" type="text" placeholder="note (optional)" value="${(v.note||'').replace(/"/g,'&quot;')}">
+  `;
+  el.querySelector("audio").addEventListener("error", ()=> el.classList.add("broken"));
+  el.querySelectorAll(".verdict button").forEach(b=>{
+    b.onclick = ()=>{
+      const r = b.dataset.r;
+      state[name] = state[name] || {};
+      state[name].rate = (state[name].rate===r) ? null : r;
+      save();
+      el.className = "card" + (state[name].rate ? " "+state[name].rate : "");
+      el.querySelectorAll(".verdict button").forEach(x=>x.classList.toggle("on", x.dataset.r===state[name].rate));
+    };
+  });
+  el.querySelector(".note").oninput = e=>{
+    state[name] = state[name] || {};
+    state[name].note = e.target.value;
+    save();
+  };
+  return el;
+}
+
+function section(title, list){
+  const h = document.createElement("h2"); h.textContent = title;
+  const g = document.createElement("div"); g.className = "grid";
+  list.forEach(n => g.appendChild(card(n)));
+  const frag = document.createDocumentFragment();
+  frag.appendChild(h); frag.appendChild(g);
+  return frag;
+}
+
+function render(){
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  main.appendChild(section("Your voices · davidk  (cull the weak ones)", DAVIDK));
+  main.appendChild(section("devnen pack", DEVNEN));
+  refreshCount();
+}
+
+function refreshCount(){
+  const all = [...DAVIDK, ...DEVNEN];
+  const k = all.filter(n=>state[n]?.rate==="keep").length;
+  const m = all.filter(n=>state[n]?.rate==="maybe").length;
+  const c = all.filter(n=>state[n]?.rate==="cut").length;
+  document.getElementById("count").textContent = `${k} keep · ${m} maybe · ${c} cut · ${all.length-k-m-c} unrated`;
+}
+
+function syncSeg(){
+  document.querySelectorAll("#seg button").forEach(b=>b.classList.toggle("on", b.dataset.base===base));
+}
+
+function exportText(){
+  const lines = ["voice verdicts (base "+base+")",""];
+  for (const [grp, list] of [["davidk",DAVIDK],["devnen",DEVNEN]]){
+    for (const order of ["keep","maybe","cut"]){
+      const hit = list.filter(n=>state[n]?.rate===order);
+      hit.forEach(n=>{
+        const note = state[n].note ? "  — "+state[n].note : "";
+        lines.push(`[${order.toUpperCase().padEnd(5)}] ${n}${note}`);
+      });
+    }
+  }
+  const rated = lines.length>2;
+  if (!rated) lines.push("(nothing rated yet)");
+  return lines.join("\n");
+}
+
+// --- wire up ----------------------------------------------------------------
+document.querySelectorAll("#seg button").forEach(b=> b.onclick = ()=> setBase(b.dataset.base));
+document.getElementById("customBase").onchange = e=>{ if(e.target.value.trim()) setBase(e.target.value.trim()); };
+document.getElementById("export").onclick = ()=>{
+  document.getElementById("out").value = exportText();
+  document.getElementById("dlg").showModal();
+};
+document.getElementById("copy").onclick = async ()=>{
+  try { await navigator.clipboard.writeText(document.getElementById("out").value);
+        document.getElementById("copy").textContent = "Copied ✓"; }
+  catch { document.getElementById("out").select(); }
+};
+document.getElementById("close").onclick = ()=> document.getElementById("dlg").close();
+document.getElementById("reset").onclick = ()=>{
+  if (confirm("Clear all ratings and notes?")){ for(const k in state) delete state[k]; save(); render(); }
+};
+render(); syncSeg();
+</script>
+</body>
+</html>

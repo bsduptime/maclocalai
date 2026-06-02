@@ -50,7 +50,7 @@ There are two complementary triggers in this stack — pick whichever fits how y
 
 ```bash
 ~/.claude/hooks/voice-say "installing dependencies"
-~/.claude/hooks/voice-say "tests pass, moving on" devnen-elena   # voice override
+~/.claude/hooks/voice-say "tests pass, moving on" devnen-austin  # voice override
 ~/.claude/hooks/voice-say "dramatic line" devnen-austin 1.2 0.3  # voice + exaggeration + cfg_weight
 ```
 
@@ -116,9 +116,12 @@ Categories:
 - **davidk-\*** — David's own recordings (8 voices). Good for narration *as* David. **Avoid for Claude** — most people find AI-in-their-own-voice uncanny long-term.
 - **devnen-\*** — devnen/Chatterbox-TTS-Server pack, MIT-licensed (28 voices, mix of male/female). Recommended for Claude.
 
-Two vetted picks for Claude:
-- `devnen-elena` — female, dramatic. **Default.**
-- `devnen-austin` — male, calm.
+Picks for Claude:
+- `devnen-eli` — narration **default** (the per-repo fallback in `voice-profiles`).
+- `devnen-austin` — male, calm (vetted); maclocalai's repo voice.
+- `devnen-elena` — vetted, but **reserved for the hermes agent — don't reuse it** for narration.
+
+Per-repo voices are configured in [`voice-profiles`](https://github.com/bsduptime/jetsonlocalai/tree/main/voice-replies) (owned by the jetsonlocalai repo, since it's the one repo on both machines). Audition voices with [`vet-voices.html`](vet-voices.html).
 
 ### Optional tunables (env vars)
 
@@ -139,7 +142,7 @@ Leave them unset and the server picks sensible defaults.
 | `VOICE_REPLY_VOICE` | say / fallback | macOS voice name (default `Samantha`) |
 | `CHATTERBOX_URL` | chatterbox | primary, e.g. `http://192.168.1.200:18080` (LAN) |
 | `CHATTERBOX_URL_FALLBACK` | chatterbox | optional, e.g. `http://100.99.130.79:18080` (Tailscale). Auto-used when primary is unreachable; 2s connect timeout makes fallback fast. |
-| `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-elena`) |
+| `CHATTERBOX_VOICE` | chatterbox | voice name from `/voices` (default `devnen-eli`) |
 | `CHATTERBOX_TOKEN` | chatterbox | optional bearer if the server requires auth |
 | `CHATTERBOX_EXAGGERATION` | chatterbox | optional float, see table above |
 | `CHATTERBOX_CFG_WEIGHT` | chatterbox | optional float, see table above |
