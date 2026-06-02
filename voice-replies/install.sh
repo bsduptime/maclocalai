@@ -39,6 +39,26 @@ step "Copying voice-say wrapper to ${VOICE_SAY_DEST}"
 cp "${THIS_DIR}/voice-say" "${VOICE_SAY_DEST}"
 chmod +x "${VOICE_SAY_DEST}"
 
+# Per-repo voice profiles map (repo -> voice). voice-say reads it to pick a
+# voice per repo. It's OWNED by the jetsonlocalai repo — the one repo present on
+# BOTH Mac and Jetson — so a given repo sounds the same on every machine.
+# Best-effort: if it's not installed yet and a sibling jetsonlocalai checkout is
+# present, deploy it from there; otherwise point the user at that repo.
+PROFILES_DEST="${CLAUDE_DIR}/voice-profiles"
+SIBLING_PROFILES="${THIS_DIR}/../../jetsonlocalai/voice-replies/voice-profiles"
+if [ -f "${PROFILES_DEST}" ]; then
+  step "Per-repo voice profiles already present at ${PROFILES_DEST}"
+elif [ -f "${SIBLING_PROFILES}" ]; then
+  step "Installing voice profiles from sibling jetsonlocalai checkout"
+  cp "${SIBLING_PROFILES}" "${PROFILES_DEST}"
+else
+  step "Per-repo voice profiles not installed yet (optional)"
+  echo "    The shared repo->voice map lives in the jetsonlocalai repo. To enable"
+  echo "    per-repo narration voices, run that repo's installer:"
+  echo "      bash <jetsonlocalai>/voice-replies/install.sh"
+  echo "    Without it, narration uses the default voice (devnen-elena) everywhere."
+fi
+
 # ----------------------------- Backend pick ---------------------------------
 
 step "Pick a backend."

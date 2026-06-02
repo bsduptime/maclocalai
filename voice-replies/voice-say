@@ -31,7 +31,7 @@
 
 set -u
 TEXT="${1:-}"
-VOICE="${2:-devnen-elena}"
+VOICE="${2:-}"
 EXAG="${3:-}"
 CFG="${4:-}"
 TEMP="${5:-}"
@@ -43,6 +43,27 @@ SAY_FALLBACK_VOICE="${VOICE_SAY_FALLBACK_VOICE:-Samantha}"
 if [ -z "$TEXT" ]; then
   echo "usage: voice-say \"text\" [voice] [exaggeration] [cfg_weight] [temperature] [speed]" >&2
   exit 2
+fi
+
+# --- Per-repo voice profile -------------------------------------------------
+# When the caller passes no explicit voice ($2), pick one from the current repo
+# so parallel sessions are distinguishable by ear. Map lives in
+# $VOICE_PROFILES_FILE (default ~/.claude/voice-profiles): one "repo: voice"
+# line per repo (repo = git-toplevel basename). Unmapped repos (and non-repo
+# dirs) fall back to $DEFAULT_VOICE. An explicit $2 always wins and skips this.
+DEFAULT_VOICE="devnen-elena"
+if [ -z "$VOICE" ]; then
+  PROFILES="${VOICE_PROFILES_FILE:-$HOME/.claude/voice-profiles}"
+  REPO="$(basename "$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || pwd)")"
+  if [ -f "$PROFILES" ]; then
+    VOICE="$(awk -F'[:=]' -v r="$REPO" '
+      /^[[:space:]]*#/ { next }
+      NF < 2 { next }
+      { key=$1; gsub(/^[[:space:]]+|[[:space:]]+$/,"",key)
+        val=$2; sub(/#.*/,"",val); gsub(/^[[:space:]]+|[[:space:]]+$/,"",val)
+        if (key==r && val!="") { print val; exit } }' "$PROFILES")"
+  fi
+  VOICE="${VOICE:-$DEFAULT_VOICE}"
 fi
 
 # Build JSON safely via python3 (handles quotes/newlines in TEXT properly)
