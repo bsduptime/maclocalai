@@ -5,7 +5,7 @@
 #   voice-say "the text to speak"
 #   voice-say "the text" devnen-austin             # pick a voice
 #   voice-say "the text" devnen-austin 1.2 0.3     # voice + exaggeration + cfg_weight
-#   voice-say "the text" "" "" "" "" 1.0           # back to normal-speed (overrides 1.2 default)
+#   voice-say "the text" "" "" "" "" 1.3           # speed it up (1.0 is the default)
 #
 # Args:
 #   $1  text (required)
@@ -13,7 +13,7 @@
 #   $3  exaggeration 0.25-2.0 (optional)
 #   $4  cfg_weight 0.0-1.0   (optional)
 #   $5  temperature 0.05-1.5 (optional)
-#   $6  speed 0.5-2.0        (default: 1.2 — narration default; pitch-preserving)
+#   $6  speed 0.5-2.0        (default: 1.0 — normal; pitch-preserving when changed)
 #
 # Env (override the URLs / fallback voice if needed):
 #   VIDENGINE_TTS_URL          primary URL (default: http://192.168.1.200:18080 — LAN)
@@ -35,7 +35,7 @@ VOICE="${2:-}"
 EXAG="${3:-}"
 CFG="${4:-}"
 TEMP="${5:-}"
-SPEED="${6:-1.2}"
+SPEED="${6:-1.0}"
 URL_PRIMARY="${VIDENGINE_TTS_URL:-http://192.168.1.200:18080}"
 URL_FALLBACK="${VIDENGINE_TTS_URL_FALLBACK:-http://100.99.130.79:18080}"
 SAY_FALLBACK_VOICE="${VOICE_SAY_FALLBACK_VOICE:-Samantha}"
